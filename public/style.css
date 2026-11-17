@@ -1135,11 +1135,15 @@ tbody tr:last-child td {
 
 /* Scanner Modal Specifics */
 .scanner-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin-bottom: 12px;
 }
 
 .camera-select {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   background: var(--bg-input);
   border: 1px solid var(--border-subtle);
   color: var(--text-primary);
@@ -1154,6 +1158,34 @@ tbody tr:last-child td {
 
 .camera-select:focus {
   border-color: var(--border-focus);
+}
+
+.btn-flip-cam {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: var(--bg-surface-elevated);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.btn-flip-cam:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--border-medium);
+}
+
+.btn-flip-cam:active {
+  transform: translateY(1px);
 }
 
 .scanner-error-box {

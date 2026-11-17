@@ -4,6 +4,8 @@ const state = {
   html5QrCode: null,
   scanning: false,
   stopping: false,
+  facingMode: "environment", // Default: kamera belakang handphone
+  userExplicitCamera: null,
   scanTarget: "kasir",
   editingId: null,
   availableCameras: []
@@ -70,8 +72,15 @@ function closeModal(id) {
 }
 
 /* ==========================================================================
-   SCANNER CAMERA IMPLEMENTATION (ROBUST MULTI-DEVICE SUPPORT)
+   SCANNER CAMERA (OPTIMIZED FOR SMARTPHONE REAR CAMERA)
    ========================================================================== */
+
+function updateCameraModeLabel() {
+  const label = $("#camera-mode-label");
+  if (label) {
+    label.textContent = state.facingMode === "environment" ? "Kamera Belakang" : "Kamera Depan";
+  }
+}
 
 function formatCameraErrorMessage(err) {
   const msg = (err?.message || String(err)).toLowerCase();
@@ -85,7 +94,7 @@ function formatCameraErrorMessage(err) {
     return "Kamera sedang digunakan oleh aplikasi lain. Tutup aplikasi yang menggunakan kamera dan coba lagi.";
   }
   if (msg.includes("overconstrainederror")) {
-    return "Kamera tidak memenuhi parameter yang diminta. Coba pilih kamera lain dari daftar pilihan.";
+    return "Kamera yang diminta tidak tersedia. Sistem akan mencoba kamera alternatif.";
   }
   return err?.message || "Gagal mengaktifkan kamera. Pastikan browser memiliki izin akses video.";
 }
@@ -112,24 +121,58 @@ function showScannerError(title, detail) {
   }
 }
 
+async function updateCameraList() {
+  const cameraSelect = $("#camera-select");
+  if (!cameraSelect || typeof Html5Qrcode === "undefined") return;
+
+  try {
+    const devices = await Html5Qrcode.getCameras();
+    if (!devices || devices.length === 0) {
+      cameraSelect.style.display = "none";
+      return;
+    }
+
+    state.availableCameras = devices;
+    cameraSelect.innerHTML = devices
+      .map((c, idx) => {
+        const rawLabel = c.label || `Kamera ${idx + 1}`;
+        let cleanLabel = rawLabel;
+        if (/back|rear|belakang|environment/i.test(rawLabel)) {
+          cleanLabel = `📷 Belakang: ${rawLabel.replace(/facing back/i, "").trim()}`;
+        } else if (/front|user|depan|selfie/i.test(rawLabel)) {
+          cleanLabel = `🤳 Depan: ${rawLabel.replace(/facing front/i, "").trim()}`;
+        }
+        return `<option value="${c.id}">${cleanLabel}</option>`;
+      })
+      .join("");
+
+    if (state.userExplicitCamera) {
+      cameraSelect.value = state.userExplicitCamera;
+    }
+    cameraSelect.style.display = devices.length > 1 ? "block" : "none";
+  } catch (err) {
+    console.warn("Gagal memperbarui daftar kamera:", err);
+  }
+}
+
 async function startScanner(onDecode) {
   currentOnDecode = onDecode;
 
   const statusEl = $("#scanner-status");
   const errorBox = $("#scanner-error");
-  const cameraSelect = $("#camera-select");
+  updateCameraModeLabel();
 
   if (errorBox) errorBox.style.display = "none";
   if (statusEl) {
     statusEl.classList.remove("hidden");
-    statusEl.innerHTML = `<div class="spinner"></div><span>Mengakses kamera...</span>`;
+    statusEl.innerHTML = `<div class="spinner"></div><span>Mengaktifkan ${state.facingMode === "environment" ? "kamera belakang" : "kamera depan"}...</span>`;
   }
 
   // 1. Validasi Keamanan Browser (HTTPS / Localhost)
   if (!window.isSecureContext && location.hostname !== "localhost" && location.hostname !== "127.0.0.1") {
     showScannerError(
       "Akses Kamera Diblokir Browser",
-      "Kamera membutuhkan koneksi aman (HTTPS atau http://localhost). Jika Anda membuka via IP lokal (misal: 192.168.x.x), browser memblokir kamera untuk alasan privasi."
+      "Kamera handphone membutuhkan koneksi aman (HTTPS atau http://localhost). Jika membuka via IP lokal (misal: http://192.168.x.x), browser Android/iOS memblokir akses kamera demi privasi."
     );
     return;
   }
@@ -138,12 +181,12 @@ async function startScanner(onDecode) {
   if (typeof Html5Qrcode === "undefined") {
     showScannerError(
       "Modul Scanner Belum Siap",
-      "Pustaka scanner belum selesai dimuat. Pastikan Anda memiliki koneksi internet untuk memuat library pemindai."
+      "Pustaka scanner belum selesai dimuat. Pastikan perangkat Anda terhubung ke internet untuk memuat modul pemindai."
     );
     return;
   }
 
-  // Hentikan scanner aktif sebelumnya sebelum memulai baru
+  // Hentikan scanner aktif sebelumnya
   await stopScanner();
 
   try {
@@ -162,53 +205,31 @@ async function startScanner(onDecode) {
       ];
     }
 
-    state.html5QrCode = new Html5Qrcode("reader", formatsToSupport ? { formatsToSupport } : undefined);
+    state.html5QrCode = new Html5Qrcode("reader", {
+      experimentalFeatures: {
+        useBarCodeDetectorIfSupported: true // Menggunakan akselerasi hardware BarcodeDetector di smartphone
+      },
+      formatsToSupport: formatsToSupport
+    });
     state.scanning = true;
 
-    // 4. Deteksi Daftar Kamera yang Tersedia
-    let cameras = [];
-    try {
-      cameras = await Html5Qrcode.getCameras();
-      state.availableCameras = cameras || [];
-    } catch (e) {
-      console.warn("Gagal mendapatkan daftar kamera via getCameras():", e);
-    }
-
-    if (cameraSelect) {
-      if (cameras && cameras.length > 0) {
-        cameraSelect.innerHTML = cameras
-          .map((c, idx) => `<option value="${c.id}">${c.label || `Kamera ${idx + 1}`}</option>`)
-          .join("");
-        cameraSelect.style.display = cameras.length > 1 ? "block" : "none";
-      } else {
-        cameraSelect.style.display = "none";
-      }
-    }
-
-    // 5. Tentukan Kamera yang Akan Digunakan
+    // 4. Tentukan Konfigurasi Kamera (Utamakan Kamera Belakang Handphone)
     let cameraConfig;
-    const chosenCameraId = cameraSelect?.value;
-
-    if (chosenCameraId) {
-      cameraConfig = chosenCameraId;
-    } else if (cameras && cameras.length > 0) {
-      // Prioritaskan kamera belakang (back/rear) untuk pemindaian barcode fisik di HP/tablet
-      const rearCamera = cameras.find((c) =>
-        /back|rear|belakang|environment/i.test(c.label || "")
-      );
-      cameraConfig = rearCamera ? rearCamera.id : cameras[0].id;
-      if (cameraSelect && rearCamera) cameraSelect.value = rearCamera.id;
+    if (state.userExplicitCamera) {
+      cameraConfig = state.userExplicitCamera;
+    } else if (state.facingMode === "environment") {
+      // Direct instruction to mobile browser to pick rear camera
+      cameraConfig = { facingMode: "environment" };
     } else {
-      // Fallback tanpa ID kamera: gunakan facingMode yang fleksibel (ideal, bukan strict)
-      cameraConfig = { facingMode: { ideal: "environment" } };
+      cameraConfig = { facingMode: "user" };
     }
 
     const qrConfig = {
-      fps: 15,
+      fps: 20, // Lebih responsif untuk kamera handphone
       qrbox: (viewfinderWidth, viewfinderHeight) => {
         // Area pemindaian horizontal persegi panjang ideal untuk barcode 1D garis
-        const width = Math.min(Math.floor(viewfinderWidth * 0.85), 320);
-        const height = Math.min(Math.floor(width * 0.55), 180);
+        const width = Math.min(Math.floor(viewfinderWidth * 0.88), 340);
+        const height = Math.min(Math.floor(width * 0.52), 180);
         return { width, height };
       },
       aspectRatio: 1.333333
@@ -223,21 +244,32 @@ async function startScanner(onDecode) {
       }
     };
 
-    // 6. Jalankan Kamera dengan Fallback Bertingkat
+    // 5. Jalankan Kamera
     try {
       await state.html5QrCode.start(cameraConfig, qrConfig, handleSuccess, () => {});
     } catch (startErr) {
-      console.warn("Gagal start dengan kamera utama, mencoba fallback:", startErr);
-      // Fallback: Coba dengan kamera depan / default webcam
-      await state.html5QrCode.start(
-        { facingMode: "user" },
-        qrConfig,
-        handleSuccess,
-        () => {}
-      );
+      console.warn("Gagal start dengan kamera pilihan (" + JSON.stringify(cameraConfig) + "):", startErr);
+
+      // Jika kamera belakang gagal (misal di laptop yang hanya punya webcam depan):
+      if (state.facingMode === "environment" && !state.userExplicitCamera) {
+        console.log("Mencoba fallback otomatis ke kamera depan/webcam...");
+        state.facingMode = "user";
+        updateCameraModeLabel();
+        await state.html5QrCode.start(
+          { facingMode: "user" },
+          qrConfig,
+          handleSuccess,
+          () => {}
+        );
+      } else {
+        throw startErr;
+      }
     }
 
     if (statusEl) statusEl.classList.add("hidden");
+
+    // 6. Perbarui daftar kamera setelah stream aktif agar label nama kamera terbaca
+    await updateCameraList();
   } catch (err) {
     state.scanning = false;
     showScannerError("Kamera Tidak Dapat Diakses", formatCameraErrorMessage(err));
@@ -568,6 +600,8 @@ document.querySelectorAll(".tab").forEach((tab) => {
 // Barcode & Modals
 $("#kasir-scan-btn").addEventListener("click", () => {
   state.scanTarget = "kasir";
+  state.userExplicitCamera = null;
+  state.facingMode = "environment"; // Prioritaskan kamera belakang
   $("#scan-title").textContent = "Scan Barcode Kasir";
   openModal("scan-modal");
   setTimeout(() => {
@@ -589,6 +623,8 @@ $("#stok-add-btn").addEventListener("click", () => {
 $("#form-scan-btn").addEventListener("click", () => {
   closeModal("form-modal");
   state.scanTarget = "stok";
+  state.userExplicitCamera = null;
+  state.facingMode = "environment"; // Prioritaskan kamera belakang
   $("#scan-title").textContent = "Scan Barcode Produk";
   openModal("scan-modal");
   setTimeout(() => {
@@ -604,8 +640,32 @@ $("#form-scan-btn").addEventListener("click", () => {
   }, 100);
 });
 
+// Toggle / Flip Camera (Kamera Belakang <-> Kamera Depan)
+$("#camera-flip-btn")?.addEventListener("click", async () => {
+  const select = $("#camera-select");
+  if (state.availableCameras.length > 1 && select && select.options.length > 1) {
+    const nextIdx = (select.selectedIndex + 1) % select.options.length;
+    select.selectedIndex = nextIdx;
+    state.userExplicitCamera = select.value;
+    const selectedText = select.options[nextIdx].text.toLowerCase();
+    state.facingMode = /front|depan|user|selfie/i.test(selectedText) ? "user" : "environment";
+  } else {
+    state.facingMode = state.facingMode === "environment" ? "user" : "environment";
+    state.userExplicitCamera = null;
+  }
+
+  updateCameraModeLabel();
+  if (state.scanning && currentOnDecode) {
+    await startScanner(currentOnDecode);
+  }
+});
+
 // Camera Selection Dropdown Change
-$("#camera-select")?.addEventListener("change", async () => {
+$("#camera-select")?.addEventListener("change", async (e) => {
+  state.userExplicitCamera = e.target.value;
+  const selectedText = e.target.options[e.target.selectedIndex]?.text?.toLowerCase() || "";
+  state.facingMode = /front|depan|user|selfie/i.test(selectedText) ? "user" : "environment";
+  updateCameraModeLabel();
   if (state.scanning && currentOnDecode) {
     await startScanner(currentOnDecode);
   }
@@ -634,7 +694,7 @@ $("#scan-file-input")?.addEventListener("change", async (e) => {
         Html5QrcodeSupportedFormats.QR_CODE
       ];
     }
-    const scanner = state.html5QrCode || new Html5Qrcode("reader", formatsToSupport ? { formatsToSupport } : undefined);
+    const scanner = state.html5QrCode || new Html5Qrcode("reader", { formatsToSupport });
     toast("Menganalisis gambar...");
     const decodedText = await scanner.scanFile(file, true);
     playBeep();
