@@ -383,7 +383,7 @@ document.addEventListener("click", async (e) => {
         body: JSON.stringify({ amount: Number(restock.dataset.amount) })
       });
       await refreshProducts();
-      toast("Stok ditambah");
+      toast("Stok ditambahkan");
     } catch (err) {
       toast(err.message, true);
     }

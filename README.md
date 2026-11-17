@@ -6,10 +6,10 @@ Aplikasi kasir dan manajemen stok berbasis Express.js + TypeScript dengan pemind
 
 - Kasir dengan keranjang dan pembayaran (stok otomatis berkurang)
 - Manajemen stok: tambah, ubah, restock, hapus produk
-- Pencatatan tanggal kadaluarsa per produk beserta peringatan (kadaluarsa / sisa <= 7 hari / stok kritis)
+- Pencatatan tanggal kadaluarsa per produk beserta peringatan (kadaluarsa / sisa <= 7 hari / stok <= 5)
 - Scan barcode lewat kamera HP (html5-qrcode, format EAN-13, EAN-8, UPC, Code128, dll)
 - Pencarian data produk otomatis dari Open Food Facts saat scan barcode yang belum terdaftar
-- Estimasi kadaluarsa otomatis berdasarkan kategori produk (susu, roti, makanan kaleng, dll)
+- Estimasi kadaluarsa otomatis berdasarkan kategori produk (susu, roti, makanan kaleng)
 - Riwayat transaksi
 
 ## Cara Menjalankan
