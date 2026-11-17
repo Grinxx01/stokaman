@@ -1134,12 +1134,59 @@ tbody tr:last-child td {
 }
 
 /* Scanner Modal Specifics */
+.scanner-controls {
+  margin-bottom: 12px;
+}
+
+.camera-select {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.camera-select:focus {
+  border-color: var(--border-focus);
+}
+
+.scanner-error-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 16px;
+  gap: 8px;
+  background: var(--status-danger-bg);
+  border: 1px solid var(--status-danger-border);
+  border-radius: var(--radius-md);
+  color: var(--status-danger-fg);
+  font-size: 0.82rem;
+  line-height: 1.4;
+  margin-bottom: 14px;
+}
+
+.scanner-error-box strong {
+  color: #ffffff;
+  font-size: 0.9rem;
+}
+
 .reader-wrapper {
   position: relative;
   border-radius: var(--radius-md);
   overflow: hidden;
   background: #000000;
   border: 1px solid var(--border-subtle);
+  min-height: 240px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .reader {
@@ -1150,7 +1197,72 @@ tbody tr:last-child td {
 #reader video {
   width: 100% !important;
   height: auto !important;
+  max-height: 340px;
+  object-fit: cover;
   border-radius: var(--radius-md);
+  display: block;
+}
+
+#reader__scan_region {
+  background: transparent !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#reader__dashboard {
+  background: transparent !important;
+  padding: 0 !important;
+}
+
+#reader__dashboard_section_csr button,
+#reader__dashboard_section_swaplink {
+  display: none !important;
+}
+
+.scanner-status {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: rgba(9, 9, 11, 0.9);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  z-index: 5;
+  transition: opacity 0.2s ease;
+}
+
+.scanner-status.hidden {
+  display: none;
+}
+
+.scanner-status .spinner {
+  width: 28px;
+  height: 28px;
+  border: 2px solid var(--border-medium);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.scan-alt-row {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-dim);
+}
+
+.btn-file-scan {
+  width: 100%;
+  justify-content: center;
+  padding: 9px;
+  font-size: 0.82rem;
 }
 
 .hint {

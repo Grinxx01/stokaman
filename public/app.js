@@ -3,9 +3,13 @@ const state = {
   cart: new Map(),
   html5QrCode: null,
   scanning: false,
+  stopping: false,
   scanTarget: "kasir",
-  editingId: null
+  editingId: null,
+  availableCameras: []
 };
+
+let currentOnDecode = null;
 
 const $ = (sel) => document.querySelector(sel);
 const fmt = (n) => "Rp " + Number(n).toLocaleString("id-ID");
@@ -16,6 +20,24 @@ function toast(message, isError = false) {
   el.classList.toggle("error", isError);
   el.classList.add("show");
   setTimeout(() => el.classList.remove("show"), 2800);
+}
+
+function playBeep() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    gain.gain.setValueAtTime(0.12, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.08);
+  } catch {}
 }
 
 async function api(path, options = {}) {
@@ -47,36 +69,203 @@ function closeModal(id) {
   $("#" + id).classList.remove("open");
 }
 
+/* ==========================================================================
+   SCANNER CAMERA IMPLEMENTATION (ROBUST MULTI-DEVICE SUPPORT)
+   ========================================================================== */
+
+function formatCameraErrorMessage(err) {
+  const msg = (err?.message || String(err)).toLowerCase();
+  if (msg.includes("notallowederror") || msg.includes("permission") || msg.includes("denied")) {
+    return "Izin akses kamera ditolak. Silakan izinkan akses kamera di pengaturan browser Anda (klik ikon gembok pada bilah alamat).";
+  }
+  if (msg.includes("notfounderror") || msg.includes("devicesnotfounderror")) {
+    return "Tidak ada perangkat kamera yang terdeteksi di perangkat ini.";
+  }
+  if (msg.includes("notreadableerror") || msg.includes("trackstarterror")) {
+    return "Kamera sedang digunakan oleh aplikasi lain. Tutup aplikasi yang menggunakan kamera dan coba lagi.";
+  }
+  if (msg.includes("overconstrainederror")) {
+    return "Kamera tidak memenuhi parameter yang diminta. Coba pilih kamera lain dari daftar pilihan.";
+  }
+  return err?.message || "Gagal mengaktifkan kamera. Pastikan browser memiliki izin akses video.";
+}
+
+function showScannerError(title, detail) {
+  const statusEl = $("#scanner-status");
+  if (statusEl) statusEl.classList.add("hidden");
+
+  const errorBox = $("#scanner-error");
+  if (errorBox) {
+    errorBox.style.display = "flex";
+    errorBox.innerHTML = `
+      <strong>${title}</strong>
+      <p>${detail}</p>
+      <button type="button" id="scanner-retry-btn" class="mini-btn" style="margin-top:6px;background:#ffffff;color:#000000;font-weight:700;">
+        Coba Lagi
+      </button>
+    `;
+    $("#scanner-retry-btn")?.addEventListener("click", () => {
+      if (currentOnDecode) startScanner(currentOnDecode);
+    });
+  } else {
+    toast(`${title}: ${detail}`, true);
+  }
+}
+
 async function startScanner(onDecode) {
-  if (state.scanning) return;
-  const formats = [
-    "ean_13", "ean_8", "upc_a", "upc_e", "code_128", "code_39", "itf"
-  ];
-  state.html5QrCode = new Html5Qrcode("reader", { formatsToSupport: formats });
-  state.scanning = true;
-  try {
-    await state.html5QrCode.start(
-      { facingMode: "environment" },
-      { fps: 10, qrbox: { width: 260, height: 160 } },
-      (text) => {
-        stopScanner();
-        onDecode(text);
-      }
+  currentOnDecode = onDecode;
+
+  const statusEl = $("#scanner-status");
+  const errorBox = $("#scanner-error");
+  const cameraSelect = $("#camera-select");
+
+  if (errorBox) errorBox.style.display = "none";
+  if (statusEl) {
+    statusEl.classList.remove("hidden");
+    statusEl.innerHTML = `<div class="spinner"></div><span>Mengakses kamera...</span>`;
+  }
+
+  // 1. Validasi Keamanan Browser (HTTPS / Localhost)
+  if (!window.isSecureContext && location.hostname !== "localhost" && location.hostname !== "127.0.0.1") {
+    showScannerError(
+      "Akses Kamera Diblokir Browser",
+      "Kamera membutuhkan koneksi aman (HTTPS atau http://localhost). Jika Anda membuka via IP lokal (misal: 192.168.x.x), browser memblokir kamera untuk alasan privasi."
     );
+    return;
+  }
+
+  // 2. Validasi Ketersediaan Library Html5Qrcode
+  if (typeof Html5Qrcode === "undefined") {
+    showScannerError(
+      "Modul Scanner Belum Siap",
+      "Pustaka scanner belum selesai dimuat. Pastikan Anda memiliki koneksi internet untuk memuat library pemindai."
+    );
+    return;
+  }
+
+  // Hentikan scanner aktif sebelumnya sebelum memulai baru
+  await stopScanner();
+
+  try {
+    // 3. Konfigurasi Format Barcode yang Didukung
+    let formatsToSupport = undefined;
+    if (window.Html5QrcodeSupportedFormats) {
+      formatsToSupport = [
+        Html5QrcodeSupportedFormats.EAN_13,
+        Html5QrcodeSupportedFormats.EAN_8,
+        Html5QrcodeSupportedFormats.CODE_128,
+        Html5QrcodeSupportedFormats.CODE_39,
+        Html5QrcodeSupportedFormats.UPC_A,
+        Html5QrcodeSupportedFormats.UPC_E,
+        Html5QrcodeSupportedFormats.ITF,
+        Html5QrcodeSupportedFormats.QR_CODE
+      ];
+    }
+
+    state.html5QrCode = new Html5Qrcode("reader", formatsToSupport ? { formatsToSupport } : undefined);
+    state.scanning = true;
+
+    // 4. Deteksi Daftar Kamera yang Tersedia
+    let cameras = [];
+    try {
+      cameras = await Html5Qrcode.getCameras();
+      state.availableCameras = cameras || [];
+    } catch (e) {
+      console.warn("Gagal mendapatkan daftar kamera via getCameras():", e);
+    }
+
+    if (cameraSelect) {
+      if (cameras && cameras.length > 0) {
+        cameraSelect.innerHTML = cameras
+          .map((c, idx) => `<option value="${c.id}">${c.label || `Kamera ${idx + 1}`}</option>`)
+          .join("");
+        cameraSelect.style.display = cameras.length > 1 ? "block" : "none";
+      } else {
+        cameraSelect.style.display = "none";
+      }
+    }
+
+    // 5. Tentukan Kamera yang Akan Digunakan
+    let cameraConfig;
+    const chosenCameraId = cameraSelect?.value;
+
+    if (chosenCameraId) {
+      cameraConfig = chosenCameraId;
+    } else if (cameras && cameras.length > 0) {
+      // Prioritaskan kamera belakang (back/rear) untuk pemindaian barcode fisik di HP/tablet
+      const rearCamera = cameras.find((c) =>
+        /back|rear|belakang|environment/i.test(c.label || "")
+      );
+      cameraConfig = rearCamera ? rearCamera.id : cameras[0].id;
+      if (cameraSelect && rearCamera) cameraSelect.value = rearCamera.id;
+    } else {
+      // Fallback tanpa ID kamera: gunakan facingMode yang fleksibel (ideal, bukan strict)
+      cameraConfig = { facingMode: { ideal: "environment" } };
+    }
+
+    const qrConfig = {
+      fps: 15,
+      qrbox: (viewfinderWidth, viewfinderHeight) => {
+        // Area pemindaian horizontal persegi panjang ideal untuk barcode 1D garis
+        const width = Math.min(Math.floor(viewfinderWidth * 0.85), 320);
+        const height = Math.min(Math.floor(width * 0.55), 180);
+        return { width, height };
+      },
+      aspectRatio: 1.333333
+    };
+
+    const handleSuccess = async (decodedText) => {
+      playBeep();
+      await stopScanner();
+      closeModal("scan-modal");
+      if (currentOnDecode) {
+        currentOnDecode(decodedText);
+      }
+    };
+
+    // 6. Jalankan Kamera dengan Fallback Bertingkat
+    try {
+      await state.html5QrCode.start(cameraConfig, qrConfig, handleSuccess, () => {});
+    } catch (startErr) {
+      console.warn("Gagal start dengan kamera utama, mencoba fallback:", startErr);
+      // Fallback: Coba dengan kamera depan / default webcam
+      await state.html5QrCode.start(
+        { facingMode: "user" },
+        qrConfig,
+        handleSuccess,
+        () => {}
+      );
+    }
+
+    if (statusEl) statusEl.classList.add("hidden");
   } catch (err) {
     state.scanning = false;
-    toast("Kamera tidak dapat diakses: " + err.message, true);
+    showScannerError("Kamera Tidak Dapat Diakses", formatCameraErrorMessage(err));
   }
 }
 
 async function stopScanner() {
-  if (!state.scanning || !state.html5QrCode) return;
+  if (state.stopping) return;
+  state.stopping = true;
+
   try {
-    await state.html5QrCode.stop();
-  } catch {}
-  state.html5QrCode.clear();
-  state.html5QrCode = null;
-  state.scanning = false;
+    if (state.html5QrCode) {
+      if (state.html5QrCode.isScanning) {
+        await state.html5QrCode.stop();
+      }
+      try {
+        state.html5QrCode.clear();
+      } catch {}
+    }
+  } catch (err) {
+    console.warn("Stop scanner error:", err);
+  } finally {
+    state.html5QrCode = null;
+    state.scanning = false;
+    state.stopping = false;
+    const statusEl = $("#scanner-status");
+    if (statusEl) statusEl.classList.add("hidden");
+  }
 }
 
 async function handleBarcode(barcode) {
@@ -381,10 +570,11 @@ $("#kasir-scan-btn").addEventListener("click", () => {
   state.scanTarget = "kasir";
   $("#scan-title").textContent = "Scan Barcode Kasir";
   openModal("scan-modal");
-  startScanner((barcode) => {
-    closeModal("scan-modal");
-    handleBarcode(barcode);
-  });
+  setTimeout(() => {
+    startScanner((barcode) => {
+      handleBarcode(barcode);
+    });
+  }, 100);
 });
 
 $("#stok-add-btn").addEventListener("click", () => {
@@ -401,16 +591,61 @@ $("#form-scan-btn").addEventListener("click", () => {
   state.scanTarget = "stok";
   $("#scan-title").textContent = "Scan Barcode Produk";
   openModal("scan-modal");
-  startScanner(async (barcode) => {
-    closeModal("scan-modal");
-    try {
-      const product = await api(`/api/products/lookup/${encodeURIComponent(barcode)}`);
-      fillForm(product, product.id !== undefined);
-      openModal("form-modal");
-    } catch (err) {
-      toast(err.message, true);
+  setTimeout(() => {
+    startScanner(async (barcode) => {
+      try {
+        const product = await api(`/api/products/lookup/${encodeURIComponent(barcode)}`);
+        fillForm(product, product.id !== undefined);
+        openModal("form-modal");
+      } catch (err) {
+        toast(err.message, true);
+      }
+    });
+  }, 100);
+});
+
+// Camera Selection Dropdown Change
+$("#camera-select")?.addEventListener("change", async () => {
+  if (state.scanning && currentOnDecode) {
+    await startScanner(currentOnDecode);
+  }
+});
+
+// Scan From Image File Alternative
+$("#scan-file-btn")?.addEventListener("click", () => {
+  $("#scan-file-input")?.click();
+});
+
+$("#scan-file-input")?.addEventListener("change", async (e) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+
+  try {
+    let formatsToSupport = undefined;
+    if (window.Html5QrcodeSupportedFormats) {
+      formatsToSupport = [
+        Html5QrcodeSupportedFormats.EAN_13,
+        Html5QrcodeSupportedFormats.EAN_8,
+        Html5QrcodeSupportedFormats.CODE_128,
+        Html5QrcodeSupportedFormats.CODE_39,
+        Html5QrcodeSupportedFormats.UPC_A,
+        Html5QrcodeSupportedFormats.UPC_E,
+        Html5QrcodeSupportedFormats.ITF,
+        Html5QrcodeSupportedFormats.QR_CODE
+      ];
     }
-  });
+    const scanner = state.html5QrCode || new Html5Qrcode("reader", formatsToSupport ? { formatsToSupport } : undefined);
+    toast("Menganalisis gambar...");
+    const decodedText = await scanner.scanFile(file, true);
+    playBeep();
+    await stopScanner();
+    closeModal("scan-modal");
+    if (currentOnDecode) currentOnDecode(decodedText);
+  } catch (err) {
+    toast("Gagal membaca barcode dari gambar: " + (err?.message || err), true);
+  } finally {
+    e.target.value = "";
+  }
 });
 
 $("#kasir-barcode").addEventListener("keydown", async (e) => {

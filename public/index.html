@@ -200,11 +200,34 @@
         </div>
         <button class="btn-close" data-close="scan-modal" aria-label="Tutup modal">&times;</button>
       </div>
+
+      <div class="scanner-controls">
+        <select id="camera-select" class="camera-select" aria-label="Pilih Perangkat Kamera"></select>
+      </div>
+
+      <div id="scanner-error" class="scanner-error-box" style="display: none;"></div>
+
       <div class="reader-wrapper">
         <div id="reader" class="reader"></div>
-        <div class="scanner-crosshair" aria-hidden="true"></div>
+        <div id="scanner-status" class="scanner-status">
+          <div class="spinner"></div>
+          <span>Menghubungkan ke kamera...</span>
+        </div>
       </div>
-      <p class="hint">Arahkan barcode produk tepat ke area kamera. Pastikan pencahayaan memadai.</p>
+
+      <p class="hint">Arahkan barcode produk tepat ke area kamera. Pastikan pencahayaan cukup terang.</p>
+
+      <div class="scan-alt-row">
+        <input type="file" id="scan-file-input" accept="image/*" style="display:none">
+        <button type="button" id="scan-file-btn" class="btn-secondary btn-file-scan">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="2"/>
+            <circle cx="8.5" cy="8.5" r="1.5"/>
+            <polyline points="21 15 16 10 5 21"/>
+          </svg>
+          <span>Pilih / Unggah Foto Barcode</span>
+        </button>
+      </div>
     </div>
   </div>
 
@@ -274,7 +297,18 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
+  <!-- Html5Qrcode dengan fallback berjenjang -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script>
+    if (typeof Html5Qrcode === "undefined") {
+      document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"><\/script>');
+    }
+  </script>
+  <script>
+    if (typeof Html5Qrcode === "undefined") {
+      document.write('<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"><\/script>');
+    }
+  </script>
   <script src="/app.js"></script>
 </body>
 </html>
