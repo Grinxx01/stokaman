@@ -15,7 +15,7 @@ function toast(message, isError = false) {
   el.textContent = message;
   el.classList.toggle("error", isError);
   el.classList.add("show");
-  setTimeout(() => el.classList.remove("show"), 2600);
+  setTimeout(() => el.classList.remove("show"), 2800);
 }
 
 async function api(path, options = {}) {
@@ -126,16 +126,34 @@ function renderKasirProducts() {
   const filtered = state.products.filter((p) =>
     p.name.toLowerCase().includes(query) || p.barcode.includes(query)
   );
-  $("#kasir-products").innerHTML = filtered
-    .filter((p) => p.stock > 0)
+
+  const available = filtered.filter((p) => p.stock > 0);
+  if (available.length === 0) {
+    $("#kasir-products").innerHTML = `
+      <div class="empty-state">
+        <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+        </svg>
+        <p>Tidak ada produk ditemukan.</p>
+      </div>`;
+    return;
+  }
+
+  $("#kasir-products").innerHTML = available
     .map((p) => `
       <div class="product-tile" data-barcode="${p.barcode}">
+        <div class="p-header">
+          <span class="p-cat">${esc(p.category || "Umum")}</span>
+          <span class="p-stock ${p.stock <= 5 ? "low" : ""}">Stok: ${p.stock}</span>
+        </div>
         <div class="p-name">${esc(p.name)}</div>
-        <div class="p-price">${fmt(p.price)}</div>
-        <div class="p-stock">Stok: ${p.stock}</div>
+        <div class="p-footer">
+          <span class="p-price">${fmt(p.price)}</span>
+          <span class="p-add-hint">+ Tambah</span>
+        </div>
       </div>
     `)
-    .join("") || `<p class="empty">Tidak ada produk.</p>`;
+    .join("");
 }
 
 function renderStok() {
@@ -148,33 +166,70 @@ function renderStok() {
   for (const p of filtered) {
     if (p.expiry_date) {
       const status = expiryStatus(p.expiry_date);
-      if (status.cls === "expired") alerts.push(`<div class="alert expired">${esc(p.name)} sudah kadaluarsa (${p.expiry_date})</div>`);
-      else if (status.cls === "soon") alerts.push(`<div class="alert soon">${esc(p.name)} mendekati kadaluarsa (${p.expiry_date})</div>`);
+      if (status.cls === "expired") {
+        alerts.push(`
+          <div class="alert expired">
+            <span class="alert-tag">KADALUARSA</span>
+            <span class="alert-msg"><strong>${esc(p.name)}</strong> telah melewati batas (${p.expiry_date})</span>
+          </div>
+        `);
+      } else if (status.cls === "soon") {
+        alerts.push(`
+          <div class="alert soon">
+            <span class="alert-tag">PERINGATAN</span>
+            <span class="alert-msg"><strong>${esc(p.name)}</strong> mendekati masa kadaluarsa (${p.expiry_date})</span>
+          </div>
+        `);
+      }
     }
-    if (p.stock <= 5) alerts.push(`<div class="alert soon">Stok ${esc(p.name)} tinggal ${p.stock}</div>`);
+    if (p.stock <= 5) {
+      alerts.push(`
+        <div class="alert soon">
+          <span class="alert-tag">STOK RENDAH</span>
+          <span class="alert-msg">Sisa stok <strong>${esc(p.name)}</strong> tersisa ${p.stock} unit</span>
+        </div>
+      `);
+    }
   }
-  $("#stok-alerts").innerHTML = alerts.slice(0, 8).join("");
+  $("#stok-alerts").innerHTML = alerts.slice(0, 6).join("");
+
+  if (filtered.length === 0) {
+    $("#stok-body").innerHTML = `
+      <tr>
+        <td colspan="7" class="table-empty">
+          Belum ada produk. Klik <strong>+ Tambah Barang</strong> untuk mulai mencatat.
+        </td>
+      </tr>`;
+    return;
+  }
 
   $("#stok-body").innerHTML = filtered
     .map((p) => {
       const status = expiryStatus(p.expiry_date);
       return `
       <tr>
-        <td>${p.barcode}</td>
-        <td>${esc(p.name)}</td>
-        <td>${fmt(p.price)}</td>
-        <td>${p.stock}</td>
-        <td>${p.expiry_date ?? "-"}</td>
+        <td><code class="barcode-badge">${p.barcode}</code></td>
+        <td>
+          <div class="cell-product">
+            <span class="cell-name">${esc(p.name)}</span>
+            ${p.category ? `<span class="cell-category">${esc(p.category)}</span>` : ""}
+          </div>
+        </td>
+        <td class="cell-mono">${fmt(p.price)}</td>
+        <td class="cell-mono">
+          <span class="stock-badge ${p.stock <= 5 ? "low" : ""}">${p.stock}</span>
+        </td>
+        <td class="cell-date">${p.expiry_date ?? "—"}</td>
         <td><span class="badge ${status.cls}">${status.label}</span></td>
         <td>
           <div class="actions">
-            <button class="mini-btn" data-restock="${p.id}" data-amount="10">+10</button>
-            <button class="mini-btn danger" data-delete="${p.id}">Hapus</button>
+            <button class="mini-btn" data-restock="${p.id}" data-amount="10" title="Tambah 10 stok">+10 Stok</button>
+            <button class="mini-btn danger" data-delete="${p.id}" title="Hapus produk">Hapus</button>
           </div>
         </td>
       </tr>`;
     })
-    .join("") || `<tr><td colspan="7" style="text-align:center;color:var(--muted)">Belum ada produk. Klik Tambah Barang untuk mulai.</td></tr>`;
+    .join("");
 }
 
 function esc(text) {
@@ -190,7 +245,7 @@ function addToCart(product) {
   }
   const current = state.cart.get(product.id) ?? { product, qty: 0 };
   if (current.qty + 1 > product.stock) {
-    toast("Stok tidak cukup", true);
+    toast("Stok tidak mencukupi", true);
     return;
   }
   current.qty += 1;
@@ -201,16 +256,28 @@ function addToCart(product) {
 function renderCart() {
   const items = [...state.cart.values()];
   if (items.length === 0) {
-    $("#cart").innerHTML = `<p class="empty">Keranjang masih kosong. Scan barang untuk mulai.</p>`;
+    $("#cart").innerHTML = `
+      <div class="cart-empty">
+        <div class="cart-empty-icon">
+          <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+        </div>
+        <p class="empty-title">Keranjang masih kosong</p>
+        <p class="empty-desc">Scan barcode atau klik produk dari katalog</p>
+      </div>`;
   } else {
     $("#cart").innerHTML = items
       .map(({ product, qty }) => `
         <div class="cart-item">
-          <span class="name">${esc(product.name)}</span>
-          <button class="qty-btn" data-cart-minus="${product.id}">-</button>
-          <span>${qty}</span>
-          <button class="qty-btn" data-cart-plus="${product.id}">+</button>
-          <span style="min-width:80px;text-align:right">${fmt(product.price * qty)}</span>
+          <div class="cart-item-info">
+            <span class="name">${esc(product.name)}</span>
+            <span class="unit-price">${fmt(product.price)} / unit</span>
+          </div>
+          <div class="cart-stepper">
+            <button class="qty-btn" data-cart-minus="${product.id}" aria-label="Kurangi jumlah">−</button>
+            <span class="qty-count">${qty}</span>
+            <button class="qty-btn" data-cart-plus="${product.id}" aria-label="Tambah jumlah">+</button>
+          </div>
+          <span class="cart-item-subtotal">${fmt(product.price * qty)}</span>
         </div>
       `)
       .join("");
@@ -233,7 +300,7 @@ async function checkout() {
     state.cart.clear();
     renderCart();
     await refreshProducts();
-    toast("Transaksi berhasil");
+    toast("Transaksi berhasil dicatat");
   } catch (err) {
     toast(err.message, true);
   }
@@ -242,37 +309,77 @@ async function checkout() {
 async function loadHistory() {
   try {
     const transactions = await api("/api/transactions");
+    if (!transactions || transactions.length === 0) {
+      $("#riwayat").innerHTML = `
+        <div class="empty-state">
+          <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5">
+            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+          </svg>
+          <p>Belum ada riwayat transaksi penjualan.</p>
+        </div>`;
+      return;
+    }
+
     $("#riwayat").innerHTML = transactions
       .map((t) => {
         const items = t.transaction_items ?? [];
+        const dateObj = new Date(t.created_at);
+        const dateStr = dateObj.toLocaleDateString("id-ID", {
+          day: "numeric",
+          month: "short",
+          year: "numeric"
+        });
+        const timeStr = dateObj.toLocaleTimeString("id-ID", {
+          hour: "2-digit",
+          minute: "2-digit"
+        });
+
         return `
         <div class="history-item">
           <div class="h-head">
-            <span>${new Date(t.created_at).toLocaleString("id-ID")}</span>
-            <span>${fmt(t.total)}</span>
+            <div class="h-meta">
+              <span class="h-tag">TRX-${t.id ? String(t.id).padStart(4, "0") : "REC"}</span>
+              <span class="h-time">${dateStr} • ${timeStr}</span>
+            </div>
+            <strong class="h-total">${fmt(t.total)}</strong>
           </div>
-          <div class="h-items">${items.map((i) => `${i.products?.name ?? "-"} x${i.qty}`).join(", ")}</div>
+          <div class="h-items">
+            ${items
+              .map((i) => `
+                <span class="h-chip">
+                  <span class="h-chip-name">${esc(i.products?.name ?? "Produk")}</span>
+                  <span class="h-chip-qty">×${i.qty}</span>
+                </span>
+              `)
+              .join("")}
+          </div>
         </div>`;
       })
-      .join("") || `<p class="empty">Belum ada transaksi.</p>`;
+      .join("");
   } catch (err) {
     toast(err.message, true);
   }
 }
 
+// Navigation Tabs
 document.querySelectorAll(".tab").forEach((tab) => {
   tab.addEventListener("click", () => {
     document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
     document.querySelectorAll(".panel").forEach((p) => p.classList.remove("active"));
     tab.classList.add("active");
     $("#tab-" + tab.dataset.tab).classList.add("active");
-    if (tab.dataset.tab === "riwayat") loadHistory();
+    if (tab.dataset.tab === "riwayat") {
+      loadHistory();
+    } else if (tab.dataset.tab === "kasir") {
+      setTimeout(() => $("#kasir-barcode")?.focus(), 80);
+    }
   });
 });
 
+// Barcode & Modals
 $("#kasir-scan-btn").addEventListener("click", () => {
   state.scanTarget = "kasir";
-  $("#scan-title").textContent = "Scan Barcode";
+  $("#scan-title").textContent = "Scan Barcode Kasir";
   openModal("scan-modal");
   startScanner((barcode) => {
     closeModal("scan-modal");
@@ -292,7 +399,7 @@ $("#stok-add-btn").addEventListener("click", () => {
 $("#form-scan-btn").addEventListener("click", () => {
   closeModal("form-modal");
   state.scanTarget = "stok";
-  $("#scan-title").textContent = "Scan Barcode";
+  $("#scan-title").textContent = "Scan Barcode Produk";
   openModal("scan-modal");
   startScanner(async (barcode) => {
     closeModal("scan-modal");
@@ -343,12 +450,13 @@ $("#product-form").addEventListener("submit", async (e) => {
     }
     closeModal("form-modal");
     await refreshProducts();
-    toast("Barang tersimpan");
+    toast("Produk berhasil disimpan");
   } catch (err) {
     toast(err.message, true);
   }
 });
 
+// Event Delegation for Dynamic Elements
 document.addEventListener("click", async (e) => {
   const tile = e.target.closest(".product-tile");
   if (tile) {
@@ -367,7 +475,7 @@ document.addEventListener("click", async (e) => {
       if (entry.qty <= 0) state.cart.delete(id);
     } else {
       if (entry.qty + 1 > entry.product.stock) {
-        toast("Stok tidak cukup", true);
+        toast("Stok tidak mencukupi", true);
         return;
       }
       entry.qty += 1;
@@ -383,18 +491,18 @@ document.addEventListener("click", async (e) => {
         body: JSON.stringify({ amount: Number(restock.dataset.amount) })
       });
       await refreshProducts();
-      toast("Stok ditambahkan");
+      toast("Stok berhasil ditambahkan +10");
     } catch (err) {
       toast(err.message, true);
     }
   }
 
   const del = e.target.closest("[data-delete]");
-  if (del && confirm("Hapus produk ini?")) {
+  if (del && confirm("Hapus produk ini dari daftar stok?")) {
     try {
       await api(`/api/products/${del.dataset.delete}`, { method: "DELETE" });
       await refreshProducts();
-      toast("Produk dihapus");
+      toast("Produk berhasil dihapus");
     } catch (err) {
       toast(err.message, true);
     }
@@ -407,6 +515,7 @@ document.addEventListener("click", async (e) => {
   }
 });
 
+// Modal Overlay Close & Esc Key
 document.querySelectorAll(".modal").forEach((modal) => {
   modal.addEventListener("click", (e) => {
     if (e.target === modal) {
@@ -416,4 +525,14 @@ document.querySelectorAll(".modal").forEach((modal) => {
   });
 });
 
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    document.querySelectorAll(".modal.open").forEach((modal) => {
+      modal.classList.remove("open");
+      if (modal.id === "scan-modal") stopScanner();
+    });
+  }
+});
+
+// Initial boot
 refreshProducts();

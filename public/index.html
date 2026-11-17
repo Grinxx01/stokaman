@@ -3,108 +3,277 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Stokaman</title>
+  <title>Stokaman — Kasir &amp; Manajemen Stok</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2'%3E%3Cpath d='M3 5v14M7 5v14M11 5v14M15 5v14M19 5v14M5 5v14M9 9v10M17 9v10'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
   <header class="topbar">
-    <h1>Stokaman</h1>
-    <nav>
-      <button class="tab active" data-tab="kasir">Kasir</button>
-      <button class="tab" data-tab="stok">Stok</button>
-      <button class="tab" data-tab="riwayat">Riwayat</button>
+    <div class="topbar-brand">
+      <div class="brand-logo" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+          <path d="M3 5v14M7 5v14M11 5v14M15 5v14M19 5v14M5 5v14M9 9v10M17 9v10"/>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <span class="brand-title">STOKAMAN</span>
+        <span class="brand-pill">POS / STOK</span>
+      </div>
+    </div>
+
+    <nav class="nav-tabs" aria-label="Navigasi Utama">
+      <button class="tab active" data-tab="kasir">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="4" width="20" height="16" rx="2"/>
+          <path d="M7 15h0M2 10h20"/>
+        </svg>
+        <span>Kasir</span>
+      </button>
+      <button class="tab" data-tab="stok">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+          <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+          <line x1="12" y1="22.08" x2="12" y2="12"/>
+        </svg>
+        <span>Stok</span>
+      </button>
+      <button class="tab" data-tab="riwayat">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/>
+          <polyline points="12 6 12 12 16 14"/>
+        </svg>
+        <span>Riwayat</span>
+      </button>
     </nav>
+
+    <div class="topbar-status">
+      <span class="status-dot"></span>
+      <span class="status-text">Sistem Online</span>
+    </div>
   </header>
 
   <main>
+    <!-- TAB KASIR -->
     <section id="tab-kasir" class="panel active">
       <div class="kasir-grid">
-        <div class="card">
+        <!-- Kolom Kiri: Keranjang & Transaksi -->
+        <div class="card checkout-card">
+          <div class="card-header">
+            <div>
+              <h2>Keranjang Transaksi</h2>
+              <span class="card-subtitle">Scan barang atau pilih dari katalog</span>
+            </div>
+          </div>
+
           <div class="scan-row">
-            <input id="kasir-barcode" type="text" inputmode="numeric" placeholder="Scan atau ketik barcode...">
+            <div class="input-with-icon">
+              <svg class="field-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <path d="M3 5v14M7 5v14M11 5v14M15 5v14M19 5v14M5 5v14M9 9v10M17 9v10"/>
+              </svg>
+              <input id="kasir-barcode" type="text" inputmode="numeric" placeholder="Scan atau ketik barcode..." autocomplete="off">
+              <kbd class="kbd-hint">↵ Enter</kbd>
+            </div>
             <button id="kasir-scan-btn" class="btn-scan" title="Scan dengan kamera">
-              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 12h10"/></svg>
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                <circle cx="12" cy="13" r="4"/>
+              </svg>
+              <span>Kamera</span>
             </button>
           </div>
-          <div id="cart" class="cart"><p class="empty">Keranjang masih kosong. Scan barang untuk mulai.</p></div>
-          <div class="cart-total">
-            <span>Total</span>
-            <strong id="cart-total">Rp 0</strong>
+
+          <div id="cart" class="cart">
+            <div class="cart-empty">
+              <div class="cart-empty-icon">
+                <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+              </div>
+              <p class="empty-title">Keranjang masih kosong</p>
+              <p class="empty-desc">Scan barcode atau klik produk dari katalog</p>
+            </div>
           </div>
-          <button id="checkout-btn" class="btn-primary" disabled>Bayar</button>
+
+          <div class="cart-summary">
+            <div class="cart-total-row">
+              <span class="total-label">Total Tagihan</span>
+              <strong id="cart-total" class="total-value">Rp 0</strong>
+            </div>
+            <button id="checkout-btn" class="btn-primary btn-checkout" disabled>
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+              <span>Bayar Sekarang</span>
+            </button>
+          </div>
         </div>
-        <div class="card">
-          <h2>Produk</h2>
-          <input id="kasir-search" type="search" placeholder="Cari produk...">
+
+        <!-- Kolom Kanan: Katalog Produk -->
+        <div class="card catalog-card">
+          <div class="card-header">
+            <div>
+              <h2>Katalog Produk</h2>
+              <span class="card-subtitle">Pilih item untuk ditambahkan ke keranjang</span>
+            </div>
+          </div>
+
+          <div class="input-with-icon search-box">
+            <svg class="field-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"/>
+              <path d="m21 21-4.3-4.3"/>
+            </svg>
+            <input id="kasir-search" type="search" placeholder="Cari nama atau barcode produk..." autocomplete="off">
+          </div>
+
           <div id="kasir-products" class="product-grid"></div>
         </div>
       </div>
     </section>
 
+    <!-- TAB STOK -->
     <section id="tab-stok" class="panel">
-      <div class="toolbar">
-        <input id="stok-search" type="search" placeholder="Cari produk...">
-        <button id="stok-add-btn" class="btn-primary">+ Tambah Barang</button>
+      <div class="card toolbar-card">
+        <div class="toolbar">
+          <div class="input-with-icon search-box">
+            <svg class="field-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"/>
+              <path d="m21 21-4.3-4.3"/>
+            </svg>
+            <input id="stok-search" type="search" placeholder="Cari barcode, nama produk, atau kategori..." autocomplete="off">
+          </div>
+          <button id="stok-add-btn" class="btn-primary btn-add">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"/>
+              <line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            <span>Tambah Barang</span>
+          </button>
+        </div>
       </div>
+
       <div id="stok-alerts" class="alerts"></div>
-      <div class="table-wrap card">
-        <table id="stok-table">
-          <thead>
-            <tr>
-              <th>Barcode</th>
-              <th>Nama</th>
-              <th>Harga</th>
-              <th>Stok</th>
-              <th>Kadaluarsa</th>
-              <th>Status</th>
-              <th>Aksi</th>
-            </tr>
-          </thead>
-          <tbody id="stok-body"></tbody>
-        </table>
+
+      <div class="card table-card">
+        <div class="table-wrap">
+          <table id="stok-table">
+            <thead>
+              <tr>
+                <th>Barcode</th>
+                <th>Nama Produk</th>
+                <th>Harga</th>
+                <th>Stok</th>
+                <th>Kadaluarsa</th>
+                <th>Status</th>
+                <th>Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="stok-body"></tbody>
+          </table>
+        </div>
       </div>
     </section>
 
+    <!-- TAB RIWAYAT -->
     <section id="tab-riwayat" class="panel">
-      <div id="riwayat" class="history"></div>
+      <div class="card history-container">
+        <div class="card-header">
+          <div>
+            <h2>Riwayat Penjualan</h2>
+            <span class="card-subtitle">Log transaksi kasir yang tercatat di sistem</span>
+          </div>
+        </div>
+        <div id="riwayat" class="history-list"></div>
+      </div>
     </section>
   </main>
 
-  <div id="scan-modal" class="modal">
-    <div class="modal-content">
+  <!-- MODAL SCAN BARCODE -->
+  <div id="scan-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="scan-title">
+    <div class="modal-content modal-scan">
       <div class="modal-header">
-        <h2 id="scan-title">Scan Barcode</h2>
-        <button class="btn-close" data-close="scan-modal">&times;</button>
+        <div class="modal-title-group">
+          <div class="modal-icon">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+              <circle cx="12" cy="13" r="4"/>
+            </svg>
+          </div>
+          <h2 id="scan-title">Scan Barcode</h2>
+        </div>
+        <button class="btn-close" data-close="scan-modal" aria-label="Tutup modal">&times;</button>
       </div>
-      <div id="reader" class="reader"></div>
-      <p class="hint">Arahkan barcode ke kamera. Pastikan pencahayaan cukup.</p>
+      <div class="reader-wrapper">
+        <div id="reader" class="reader"></div>
+        <div class="scanner-crosshair" aria-hidden="true"></div>
+      </div>
+      <p class="hint">Arahkan barcode produk tepat ke area kamera. Pastikan pencahayaan memadai.</p>
     </div>
   </div>
 
-  <div id="form-modal" class="modal">
-    <div class="modal-content">
+  <!-- MODAL FORM PRODUK -->
+  <div id="form-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="form-title">
+    <div class="modal-content modal-form">
       <div class="modal-header">
-        <h2 id="form-title">Tambah Barang</h2>
-        <button class="btn-close" data-close="form-modal">&times;</button>
-      </div>
-      <form id="product-form">
-        <input id="f-barcode" type="text" inputmode="numeric" placeholder="Barcode" required>
-        <button type="button" id="form-scan-btn" class="btn-secondary">Scan Barcode</button>
-        <input id="f-name" type="text" placeholder="Nama produk" required>
-        <input id="f-category" type="text" placeholder="Kategori (opsional)">
-        <div class="form-row">
-          <input id="f-price" type="number" min="0" step="100" placeholder="Harga jual" required>
-          <input id="f-stock" type="number" min="0" step="1" placeholder="Stok" required>
+        <div class="modal-title-group">
+          <div class="modal-icon">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M20 7h-9M14 17H5M12 12H3"/>
+            </svg>
+          </div>
+          <h2 id="form-title">Tambah Barang</h2>
         </div>
-        <label for="f-expiry">Tanggal kadaluarsa</label>
-        <input id="f-expiry" type="date">
-        <p id="expiry-hint" class="hint"></p>
-        <button type="submit" class="btn-primary">Simpan</button>
+        <button class="btn-close" data-close="form-modal" aria-label="Tutup modal">&times;</button>
+      </div>
+
+      <form id="product-form">
+        <div class="form-group">
+          <label for="f-barcode">Barcode</label>
+          <div class="form-scan-group">
+            <input id="f-barcode" type="text" inputmode="numeric" placeholder="Contoh: 8999908000000" required autocomplete="off">
+            <button type="button" id="form-scan-btn" class="btn-secondary">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                <circle cx="12" cy="13" r="4"/>
+              </svg>
+              <span>Scan</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="f-name">Nama Produk</label>
+          <input id="f-name" type="text" placeholder="Contoh: Susu UHT Cokelat 250ml" required>
+        </div>
+
+        <div class="form-group">
+          <label for="f-category">Kategori (Opsional)</label>
+          <input id="f-category" type="text" placeholder="Contoh: Minuman, Makanan Ringan, ATK">
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="f-price">Harga Jual (Rp)</label>
+            <input id="f-price" type="number" min="0" step="100" placeholder="0" required>
+          </div>
+          <div class="form-group">
+            <label for="f-stock">Jumlah Stok</label>
+            <input id="f-stock" type="number" min="0" step="1" placeholder="0" required>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="f-expiry">Tanggal Kadaluarsa</label>
+          <input id="f-expiry" type="date">
+          <p id="expiry-hint" class="hint"></p>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="btn-primary btn-submit">Simpan Produk</button>
+        </div>
       </form>
     </div>
   </div>
 
-  <div id="toast" class="toast"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="/app.js"></script>
 </body>
