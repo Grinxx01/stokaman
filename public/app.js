@@ -170,9 +170,9 @@ async function updateCameraList() {
         const rawLabel = c.label || `Kamera ${idx + 1}`;
         let cleanLabel = rawLabel;
         if (/back|rear|belakang|environment/i.test(rawLabel)) {
-          cleanLabel = `📷 Belakang: ${rawLabel.replace(/facing back/i, "").trim()}`;
+          cleanLabel = `[Belakang] ${rawLabel.replace(/facing back/i, "").trim()}`;
         } else if (/front|user|depan|selfie/i.test(rawLabel)) {
-          cleanLabel = `🤳 Depan: ${rawLabel.replace(/facing front/i, "").trim()}`;
+          cleanLabel = `[Depan] ${rawLabel.replace(/facing front/i, "").trim()}`;
         }
         return `<option value="${c.id}">${cleanLabel}</option>`;
       })

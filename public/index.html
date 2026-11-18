@@ -326,15 +326,34 @@
       <div class="pay-methods-label">Pilih Metode Pembayaran</div>
       <div class="pay-methods-grid">
         <button type="button" class="pay-method-btn active" data-method="cash">
-          <span class="method-icon">💵</span>
+          <span class="method-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="6" width="20" height="12" rx="2"/>
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M6 12h.01M18 12h.01"/>
+            </svg>
+          </span>
           <span class="method-name">Tunai</span>
         </button>
         <button type="button" class="pay-method-btn" data-method="qris">
-          <span class="method-icon">📱</span>
+          <span class="method-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="7"/>
+              <rect x="14" y="3" width="7" height="7"/>
+              <rect x="3" y="14" width="7" height="7"/>
+              <path d="M14 14h3v3h-3zM20 14v6M14 20h6"/>
+            </svg>
+          </span>
           <span class="method-name">QRIS</span>
         </button>
         <button type="button" class="pay-method-btn" data-method="debit">
-          <span class="method-icon">💳</span>
+          <span class="method-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="5" width="20" height="14" rx="2"/>
+              <line x1="2" y1="10" x2="22" y2="10"/>
+              <line x1="6" y1="15" x2="10" y2="15"/>
+            </svg>
+          </span>
           <span class="method-name">Debit / Transfer</span>
         </button>
       </div>
