@@ -54,17 +54,23 @@ language plpgsql
 as $$
 declare
   v_transaction_id uuid;
+  v_items jsonb := p_items;
   v_item jsonb;
   v_product record;
   v_total numeric(12, 2) := 0;
 begin
-  if p_items is null or jsonb_array_length(p_items) = 0 then
+  -- Jika p_items ter-serialisasi sebagai string ganda
+  if jsonb_typeof(v_items) = 'string' then
+    v_items := (v_items #>> '{}')::jsonb;
+  end if;
+
+  if v_items is null or jsonb_typeof(v_items) != 'array' or jsonb_array_length(v_items) = 0 then
     raise exception 'Keranjang tidak boleh kosong';
   end if;
 
   insert into transactions (total) values (0) returning id into v_transaction_id;
 
-  for v_item in select * from jsonb_array_elements(p_items) loop
+  for v_item in select * from jsonb_array_elements(v_items) loop
     select id, name, price, stock
       into v_product
       from products

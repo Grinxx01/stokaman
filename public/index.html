@@ -203,7 +203,7 @@
 
       <div class="scanner-controls">
         <select id="camera-select" class="camera-select" aria-label="Pilih Perangkat Kamera"></select>
-        <button type="button" id="camera-flip-btn" class="btn-secondary btn-flip-cam" title="Balik Kamera (Belakang / Depan)">
+        <button type="button" id="camera-flip-btn" class="btn-secondary" title="Balik Kamera (Belakang / Depan)">
           <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
           </svg>
@@ -298,6 +298,170 @@
           <button type="submit" class="btn-primary btn-submit">Simpan Produk</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- MODAL PEMBAYARAN KASIR -->
+  <div id="payment-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="pay-title">
+    <div class="modal-content modal-payment">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <div class="modal-icon">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="2" y="5" width="20" height="14" rx="2"/>
+              <line x1="2" y1="10" x2="22" y2="10"/>
+            </svg>
+          </div>
+          <h2 id="pay-title">Proses Pembayaran</h2>
+        </div>
+        <button class="btn-close" data-close="payment-modal" aria-label="Tutup modal">&times;</button>
+      </div>
+
+      <div class="pay-total-box">
+        <span class="pay-total-label">Total Tagihan</span>
+        <strong id="pay-modal-total" class="pay-total-amount">Rp 0</strong>
+        <span id="pay-modal-count" class="pay-total-count">0 barang di keranjang</span>
+      </div>
+
+      <div class="pay-methods-label">Pilih Metode Pembayaran</div>
+      <div class="pay-methods-grid">
+        <button type="button" class="pay-method-btn active" data-method="cash">
+          <span class="method-icon">💵</span>
+          <span class="method-name">Tunai</span>
+        </button>
+        <button type="button" class="pay-method-btn" data-method="qris">
+          <span class="method-icon">📱</span>
+          <span class="method-name">QRIS</span>
+        </button>
+        <button type="button" class="pay-method-btn" data-method="debit">
+          <span class="method-icon">💳</span>
+          <span class="method-name">Debit / Transfer</span>
+        </button>
+      </div>
+
+      <!-- KONTEN METODE TUNAI -->
+      <div id="method-cash-content" class="method-content active">
+        <div class="form-group">
+          <label for="cash-input">Uang Tunai Diterima (Rp)</label>
+          <div class="input-with-icon">
+            <span class="currency-prefix">Rp</span>
+            <input id="cash-input" type="number" inputmode="numeric" min="0" step="500" placeholder="0" class="cash-input-field">
+          </div>
+        </div>
+
+        <div class="quick-cash-row" id="quick-cash-chips">
+          <!-- Tombol uang pas dan nominal cepat di-generate dinamis -->
+        </div>
+
+        <div class="change-display-box" id="change-box">
+          <span class="change-label">Kembalian</span>
+          <strong id="cash-change" class="change-amount">Rp 0</strong>
+        </div>
+      </div>
+
+      <!-- KONTEN METODE QRIS -->
+      <div id="method-qris-content" class="method-content">
+        <div class="qris-card">
+          <div class="qris-mock-frame">
+            <svg viewBox="0 0 24 24" width="70" height="70" fill="none" stroke="currentColor" stroke-width="1.5">
+              <rect x="3" y="3" width="7" height="7"/>
+              <rect x="14" y="3" width="7" height="7"/>
+              <rect x="3" y="14" width="7" height="7"/>
+              <rect x="14" y="14" width="3" height="3"/>
+              <rect x="18" y="18" width="3" height="3"/>
+            </svg>
+            <span class="qris-badge">QRIS STANDAR NASIONAL</span>
+          </div>
+          <p class="qris-hint">Scan QRIS melalui aplikasi e-wallet atau mobile banking apa pun untuk menyelesaikan pembayaran.</p>
+        </div>
+      </div>
+
+      <!-- KONTEN METODE DEBIT/TRANSFER -->
+      <div id="method-debit-content" class="method-content">
+        <div class="form-group">
+          <label for="debit-ref">Nomor Referensi / Approval Code (Opsional)</label>
+          <input id="debit-ref" type="text" placeholder="Contoh: REF-889901 atau 4 digit kartu">
+        </div>
+        <p class="hint">Pastikan struk EDC atau bukti transfer telah terverifikasi sebelum konfirmasi.</p>
+      </div>
+
+      <div class="pay-actions">
+        <button id="btn-confirm-payment" class="btn-primary btn-pay-confirm">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+          <span id="btn-pay-text">Konfirmasi Pembayaran</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL STRUK BUKTI PEMBAYARAN -->
+  <div id="receipt-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="receipt-title">
+    <div class="modal-content modal-receipt">
+      <div class="receipt-success-banner">
+        <div class="success-icon">
+          <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+        </div>
+        <h2 id="receipt-title">Pembayaran Berhasil!</h2>
+        <span class="receipt-subtitle">Transaksi telah tercatat &amp; stok produk berkurang</span>
+      </div>
+
+      <div id="receipt-paper" class="receipt-paper">
+        <div class="receipt-header">
+          <span class="store-name">STOKAMAN POS</span>
+          <span class="store-tag">Sistem Kasir &amp; Manajemen Stok</span>
+          <div class="receipt-divider"></div>
+          <div class="receipt-meta-row">
+            <span id="rec-id">TRX-0000</span>
+            <span id="rec-date">-</span>
+          </div>
+        </div>
+
+        <div id="rec-items" class="receipt-items-list"></div>
+
+        <div class="receipt-divider"></div>
+
+        <div class="receipt-calc-table">
+          <div class="rec-calc-row bold">
+            <span>Total Tagihan</span>
+            <span id="rec-total">Rp 0</span>
+          </div>
+          <div class="rec-calc-row">
+            <span>Metode Bayar</span>
+            <span id="rec-method">Tunai</span>
+          </div>
+          <div class="rec-calc-row" id="rec-paid-row">
+            <span>Uang Diterima</span>
+            <span id="rec-paid">Rp 0</span>
+          </div>
+          <div class="rec-calc-row" id="rec-change-row">
+            <span>Kembalian</span>
+            <span id="rec-change">Rp 0</span>
+          </div>
+        </div>
+
+        <div class="receipt-footer">
+          <span>*** Terima Kasih ***</span>
+          <span class="receipt-barcode-code" id="rec-barcode-txt">STOKAMAN POS</span>
+        </div>
+      </div>
+
+      <div class="receipt-actions">
+        <button type="button" id="btn-print-receipt" class="btn-secondary btn-print">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="6 9 6 2 18 2 18 9"/>
+            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+            <rect x="6" y="14" width="12" height="8"/>
+          </svg>
+          <span>Cetak Struk</span>
+        </button>
+        <button type="button" id="btn-new-transaction" class="btn-primary btn-new-tx">
+          <span>Transaksi Baru</span>
+        </button>
+      </div>
     </div>
   </div>
 

@@ -3,7 +3,6 @@ const state = {
   cart: new Map(),
   html5QrCode: null,
   scanning: false,
-  stopping: false,
   facingMode: "environment", // Default: kamera belakang handphone
   userExplicitCamera: null,
   scanTarget: "kasir",
@@ -12,6 +11,8 @@ const state = {
 };
 
 let currentOnDecode = null;
+let stopPromise = null;
+let currentPaymentMethod = "cash";
 
 const $ = (sel) => document.querySelector(sel);
 const fmt = (n) => "Rp " + Number(n).toLocaleString("id-ID");
@@ -39,6 +40,35 @@ function playBeep() {
     gain.connect(ctx.destination);
     osc.start();
     osc.stop(ctx.currentTime + 0.08);
+  } catch {}
+}
+
+function playCashChime() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const now = ctx.currentTime;
+
+    const osc1 = ctx.createOscillator();
+    const gain1 = ctx.createGain();
+    osc1.frequency.setValueAtTime(523.25, now); // C5
+    gain1.gain.setValueAtTime(0.12, now);
+    gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+    osc1.connect(gain1);
+    gain1.connect(ctx.destination);
+    osc1.start(now);
+    osc1.stop(now + 0.15);
+
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    osc2.frequency.setValueAtTime(1046.5, now + 0.08); // C6
+    gain2.gain.setValueAtTime(0.15, now + 0.08);
+    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+    osc2.connect(gain2);
+    gain2.connect(ctx.destination);
+    osc2.start(now + 0.08);
+    osc2.stop(now + 0.35);
   } catch {}
 }
 
@@ -128,6 +158,8 @@ async function updateCameraList() {
   try {
     const devices = await Html5Qrcode.getCameras();
     if (!devices || devices.length === 0) {
+      state.availableCameras = [];
+      cameraSelect.innerHTML = "";
       cameraSelect.style.display = "none";
       return;
     }
@@ -155,6 +187,17 @@ async function updateCameraList() {
   }
 }
 
+const SUPPORTED_FORMATS = (typeof Html5QrcodeSupportedFormats !== "undefined") ? [
+  Html5QrcodeSupportedFormats.EAN_13,
+  Html5QrcodeSupportedFormats.EAN_8,
+  Html5QrcodeSupportedFormats.CODE_128,
+  Html5QrcodeSupportedFormats.CODE_39,
+  Html5QrcodeSupportedFormats.UPC_A,
+  Html5QrcodeSupportedFormats.UPC_E,
+  Html5QrcodeSupportedFormats.ITF,
+  Html5QrcodeSupportedFormats.QR_CODE
+] : undefined;
+
 async function startScanner(onDecode) {
   currentOnDecode = onDecode;
 
@@ -168,16 +211,14 @@ async function startScanner(onDecode) {
     statusEl.innerHTML = `<div class="spinner"></div><span>Mengaktifkan ${state.facingMode === "environment" ? "kamera belakang" : "kamera depan"}...</span>`;
   }
 
-  // 1. Validasi Keamanan Browser (HTTPS / Localhost)
   if (!window.isSecureContext && location.hostname !== "localhost" && location.hostname !== "127.0.0.1") {
     showScannerError(
       "Akses Kamera Diblokir Browser",
-      "Kamera handphone membutuhkan koneksi aman (HTTPS atau http://localhost). Jika membuka via IP lokal (misal: http://192.168.x.x), browser Android/iOS memblokir akses kamera demi privasi."
+      "Kamera handphone membutuhkan koneksi aman (HTTPS atau http://localhost). Jika membuka via IP lokal (misal: http://192.168.x.x), browser memblokir kamera demi privasi."
     );
     return;
   }
 
-  // 2. Validasi Ketersediaan Library Html5Qrcode
   if (typeof Html5Qrcode === "undefined") {
     showScannerError(
       "Modul Scanner Belum Siap",
@@ -186,48 +227,29 @@ async function startScanner(onDecode) {
     return;
   }
 
-  // Hentikan scanner aktif sebelumnya
   await stopScanner();
 
   try {
-    // 3. Konfigurasi Format Barcode yang Didukung
-    let formatsToSupport = undefined;
-    if (window.Html5QrcodeSupportedFormats) {
-      formatsToSupport = [
-        Html5QrcodeSupportedFormats.EAN_13,
-        Html5QrcodeSupportedFormats.EAN_8,
-        Html5QrcodeSupportedFormats.CODE_128,
-        Html5QrcodeSupportedFormats.CODE_39,
-        Html5QrcodeSupportedFormats.UPC_A,
-        Html5QrcodeSupportedFormats.UPC_E,
-        Html5QrcodeSupportedFormats.ITF,
-        Html5QrcodeSupportedFormats.QR_CODE
-      ];
-    }
-
     state.html5QrCode = new Html5Qrcode("reader", {
       experimentalFeatures: {
-        useBarCodeDetectorIfSupported: true // Menggunakan akselerasi hardware BarcodeDetector di smartphone
+        useBarCodeDetectorIfSupported: true
       },
-      formatsToSupport: formatsToSupport
+      formatsToSupport: SUPPORTED_FORMATS
     });
     state.scanning = true;
 
-    // 4. Tentukan Konfigurasi Kamera (Utamakan Kamera Belakang Handphone)
     let cameraConfig;
     if (state.userExplicitCamera) {
       cameraConfig = state.userExplicitCamera;
     } else if (state.facingMode === "environment") {
-      // Direct instruction to mobile browser to pick rear camera
       cameraConfig = { facingMode: "environment" };
     } else {
       cameraConfig = { facingMode: "user" };
     }
 
     const qrConfig = {
-      fps: 20, // Lebih responsif untuk kamera handphone
+      fps: 20,
       qrbox: (viewfinderWidth, viewfinderHeight) => {
-        // Area pemindaian horizontal persegi panjang ideal untuk barcode 1D garis
         const width = Math.min(Math.floor(viewfinderWidth * 0.88), 340);
         const height = Math.min(Math.floor(width * 0.52), 180);
         return { width, height };
@@ -244,15 +266,11 @@ async function startScanner(onDecode) {
       }
     };
 
-    // 5. Jalankan Kamera
     try {
       await state.html5QrCode.start(cameraConfig, qrConfig, handleSuccess, () => {});
     } catch (startErr) {
-      console.warn("Gagal start dengan kamera pilihan (" + JSON.stringify(cameraConfig) + "):", startErr);
-
-      // Jika kamera belakang gagal (misal di laptop yang hanya punya webcam depan):
+      console.warn("Gagal start dengan kamera pilihan:", startErr);
       if (state.facingMode === "environment" && !state.userExplicitCamera) {
-        console.log("Mencoba fallback otomatis ke kamera depan/webcam...");
         state.facingMode = "user";
         updateCameraModeLabel();
         await state.html5QrCode.start(
@@ -268,7 +286,14 @@ async function startScanner(onDecode) {
 
     if (statusEl) statusEl.classList.add("hidden");
 
-    // 6. Perbarui daftar kamera setelah stream aktif agar label nama kamera terbaca
+    try {
+      const trackSettings = state.html5QrCode?.getRunningTrackSettings?.();
+      if (trackSettings?.facingMode) {
+        state.facingMode = trackSettings.facingMode;
+        updateCameraModeLabel();
+      }
+    } catch {}
+
     await updateCameraList();
   } catch (err) {
     state.scanning = false;
@@ -276,28 +301,28 @@ async function startScanner(onDecode) {
   }
 }
 
-async function stopScanner() {
-  if (state.stopping) return;
-  state.stopping = true;
-
-  try {
-    if (state.html5QrCode) {
-      if (state.html5QrCode.isScanning) {
-        await state.html5QrCode.stop();
+function stopScanner() {
+  if (stopPromise) return stopPromise;
+  stopPromise = (async () => {
+    try {
+      if (state.html5QrCode) {
+        if (state.html5QrCode.isScanning) {
+          await state.html5QrCode.stop();
+        }
+        try {
+          state.html5QrCode.clear();
+        } catch {}
       }
-      try {
-        state.html5QrCode.clear();
-      } catch {}
+    } catch (err) {
+      console.warn("Stop scanner error:", err);
+    } finally {
+      state.html5QrCode = null;
+      state.scanning = false;
+      const statusEl = $("#scanner-status");
+      if (statusEl) statusEl.classList.add("hidden");
     }
-  } catch (err) {
-    console.warn("Stop scanner error:", err);
-  } finally {
-    state.html5QrCode = null;
-    state.scanning = false;
-    state.stopping = false;
-    const statusEl = $("#scanner-status");
-    if (statusEl) statusEl.classList.add("hidden");
-  }
+  })().finally(() => { stopPromise = null; });
+  return stopPromise;
 }
 
 async function handleBarcode(barcode) {
@@ -474,6 +499,11 @@ function addToCart(product) {
   renderCart();
 }
 
+function getCartTotal() {
+  const items = [...state.cart.values()];
+  return items.reduce((sum, { product, qty }) => sum + product.price * qty, 0);
+}
+
 function renderCart() {
   const items = [...state.cart.values()];
   if (items.length === 0) {
@@ -503,28 +533,206 @@ function renderCart() {
       `)
       .join("");
   }
-  const total = items.reduce((sum, { product, qty }) => sum + product.price * qty, 0);
+  const total = getCartTotal();
   $("#cart-total").textContent = fmt(total);
   $("#checkout-btn").disabled = items.length === 0;
 }
 
-async function checkout() {
+/* ==========================================================================
+   PEMBAYARAN & CHECKOUT WORKFLOW
+   ========================================================================== */
+
+function openPaymentModal() {
+  const items = [...state.cart.values()];
+  if (items.length === 0) return;
+
+  const total = getCartTotal();
+  const totalQty = items.reduce((sum, { qty }) => sum + qty, 0);
+
+  $("#pay-modal-total").textContent = fmt(total);
+  $("#pay-modal-count").textContent = `${items.length} jenis produk (${totalQty} item)`;
+
+  setPaymentMethod("cash");
+  renderQuickCashChips(total);
+
+  const cashInput = $("#cash-input");
+  cashInput.value = total;
+  updateCashChange(total);
+
+  openModal("payment-modal");
+  setTimeout(() => {
+    cashInput.focus();
+    cashInput.select();
+  }, 100);
+}
+
+function setPaymentMethod(method) {
+  currentPaymentMethod = method;
+  document.querySelectorAll(".pay-method-btn").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.method === method);
+  });
+  document.querySelectorAll(".method-content").forEach((c) => {
+    c.classList.remove("active");
+  });
+  $(`#method-${method}-content`)?.classList.add("active");
+
+  const total = getCartTotal();
+  if (method === "cash") {
+    updateCashChange(total);
+  } else {
+    $("#btn-confirm-payment").disabled = false;
+  }
+}
+
+function renderQuickCashChips(total) {
+  const container = $("#quick-cash-chips");
+  if (!container) return;
+
+  const standardDenominations = [10000, 20000, 50000, 100000, 200000, 500000];
+  const chips = [];
+
+  chips.push({ label: "Uang Pas", value: total });
+
+  for (const denom of standardDenominations) {
+    if (denom > total && chips.length < 5) {
+      chips.push({ label: fmt(denom), value: denom });
+    }
+  }
+
+  const next50k = Math.ceil(total / 50000) * 50000;
+  if (next50k > total && !chips.some((c) => c.value === next50k)) {
+    chips.push({ label: fmt(next50k), value: next50k });
+  }
+
+  container.innerHTML = chips
+    .map(
+      (c) =>
+        `<button type="button" class="quick-cash-chip ${c.value === total ? "active" : ""}" data-cash="${c.value}">${c.label}</button>`
+    )
+    .join("");
+}
+
+function updateCashChange(total) {
+  const cashVal = Number($("#cash-input")?.value) || 0;
+  const change = cashVal - total;
+  const changeBox = $("#change-box");
+  const changeEl = $("#cash-change");
+  const confirmBtn = $("#btn-confirm-payment");
+
+  if (currentPaymentMethod !== "cash") {
+    confirmBtn.disabled = false;
+    return;
+  }
+
+  if (change >= 0) {
+    changeBox?.classList.remove("short");
+    if (changeEl) changeEl.textContent = fmt(change);
+    if (confirmBtn) confirmBtn.disabled = false;
+  } else {
+    changeBox?.classList.add("short");
+    if (changeEl) changeEl.textContent = `Kurang ${fmt(Math.abs(change))}`;
+    if (confirmBtn) confirmBtn.disabled = true;
+  }
+}
+
+async function confirmPayment() {
   const items = [...state.cart.values()].map(({ product, qty }) => ({
     product_id: product.id,
     qty
   }));
+
+  if (items.length === 0) {
+    toast("Keranjang belanja kosong", true);
+    return;
+  }
+
+  const total = getCartTotal();
+  const cashPaid = Number($("#cash-input")?.value) || total;
+  const change = Math.max(0, cashPaid - total);
+  const debitRef = $("#debit-ref")?.value.trim() || null;
+
+  const confirmBtn = $("#btn-confirm-payment");
+  const btnText = $("#btn-pay-text");
+  confirmBtn.disabled = true;
+  const origText = btnText.textContent;
+  btnText.textContent = "Menyimpan Transaksi...";
+
   try {
-    await api("/api/transactions", {
+    const payload = {
+      items,
+      payment_method: currentPaymentMethod,
+      amount_paid: currentPaymentMethod === "cash" ? cashPaid : total,
+      reference: debitRef
+    };
+
+    const res = await api("/api/transactions", {
       method: "POST",
-      body: JSON.stringify({ items })
+      body: JSON.stringify(payload)
     });
+
+    playCashChime();
+    closeModal("payment-modal");
+
+    showReceiptModal(res, [...state.cart.values()], total, cashPaid, change);
+
     state.cart.clear();
     renderCart();
     await refreshProducts();
-    toast("Transaksi berhasil dicatat");
+    toast("Pembayaran berhasil dicatat!");
   } catch (err) {
     toast(err.message, true);
+  } finally {
+    confirmBtn.disabled = false;
+    btnText.textContent = origText;
   }
+}
+
+function showReceiptModal(txData, cartEntries, total, cashPaid, change) {
+  const txId = txData?.id ? String(txData.id).slice(0, 8).toUpperCase() : Date.now().toString().slice(-6);
+  const dateStr = new Date().toLocaleString("id-ID", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+
+  $("#rec-id").textContent = `TRX-${txId}`;
+  $("#rec-date").textContent = dateStr;
+  $("#rec-total").textContent = fmt(total);
+
+  const methodLabelMap = {
+    cash: "Tunai",
+    qris: "QRIS",
+    debit: "Debit / Transfer"
+  };
+  $("#rec-method").textContent = methodLabelMap[currentPaymentMethod] || "Tunai";
+
+  const paidRow = $("#rec-paid-row");
+  const changeRow = $("#rec-change-row");
+  if (currentPaymentMethod === "cash") {
+    paidRow.style.display = "flex";
+    changeRow.style.display = "flex";
+    $("#rec-paid").textContent = fmt(cashPaid);
+    $("#rec-change").textContent = fmt(change);
+  } else {
+    paidRow.style.display = "none";
+    changeRow.style.display = "none";
+  }
+
+  $("#rec-items").innerHTML = cartEntries
+    .map(
+      ({ product, qty }) => `
+      <div class="receipt-item-row">
+        <span class="receipt-item-name">${esc(product.name)}</span>
+        <span class="receipt-item-total">${fmt(product.price * qty)}</span>
+      </div>
+      <div class="receipt-item-sub">${qty} × ${fmt(product.price)}</div>
+    `
+    )
+    .join("");
+
+  openModal("receipt-modal");
 }
 
 async function loadHistory() {
@@ -559,7 +767,7 @@ async function loadHistory() {
         <div class="history-item">
           <div class="h-head">
             <div class="h-meta">
-              <span class="h-tag">TRX-${t.id ? String(t.id).padStart(4, "0") : "REC"}</span>
+              <span class="h-tag">TRX-${t.id ? String(t.id).padStart(4, "0").slice(-4) : "REC"}</span>
               <span class="h-time">${dateStr} • ${timeStr}</span>
             </div>
             <strong class="h-total">${fmt(t.total)}</strong>
@@ -601,7 +809,7 @@ document.querySelectorAll(".tab").forEach((tab) => {
 $("#kasir-scan-btn").addEventListener("click", () => {
   state.scanTarget = "kasir";
   state.userExplicitCamera = null;
-  state.facingMode = "environment"; // Prioritaskan kamera belakang
+  state.facingMode = "environment";
   $("#scan-title").textContent = "Scan Barcode Kasir";
   openModal("scan-modal");
   setTimeout(() => {
@@ -624,7 +832,7 @@ $("#form-scan-btn").addEventListener("click", () => {
   closeModal("form-modal");
   state.scanTarget = "stok";
   state.userExplicitCamera = null;
-  state.facingMode = "environment"; // Prioritaskan kamera belakang
+  state.facingMode = "environment";
   $("#scan-title").textContent = "Scan Barcode Produk";
   openModal("scan-modal");
   setTimeout(() => {
@@ -640,7 +848,7 @@ $("#form-scan-btn").addEventListener("click", () => {
   }, 100);
 });
 
-// Toggle / Flip Camera (Kamera Belakang <-> Kamera Depan)
+// Toggle / Flip Camera
 $("#camera-flip-btn")?.addEventListener("click", async () => {
   const select = $("#camera-select");
   if (state.availableCameras.length > 1 && select && select.options.length > 1) {
@@ -681,20 +889,7 @@ $("#scan-file-input")?.addEventListener("change", async (e) => {
   if (!file) return;
 
   try {
-    let formatsToSupport = undefined;
-    if (window.Html5QrcodeSupportedFormats) {
-      formatsToSupport = [
-        Html5QrcodeSupportedFormats.EAN_13,
-        Html5QrcodeSupportedFormats.EAN_8,
-        Html5QrcodeSupportedFormats.CODE_128,
-        Html5QrcodeSupportedFormats.CODE_39,
-        Html5QrcodeSupportedFormats.UPC_A,
-        Html5QrcodeSupportedFormats.UPC_E,
-        Html5QrcodeSupportedFormats.ITF,
-        Html5QrcodeSupportedFormats.QR_CODE
-      ];
-    }
-    const scanner = state.html5QrCode || new Html5Qrcode("reader", { formatsToSupport });
+    const scanner = state.html5QrCode || new Html5Qrcode("reader", { formatsToSupport: SUPPORTED_FORMATS });
     toast("Menganalisis gambar...");
     const decodedText = await scanner.scanFile(file, true);
     playBeep();
@@ -719,7 +914,45 @@ $("#kasir-barcode").addEventListener("keydown", async (e) => {
 $("#kasir-search").addEventListener("input", renderKasirProducts);
 $("#stok-search").addEventListener("input", renderStok);
 
-$("#checkout-btn").addEventListener("click", checkout);
+// Buka Modal Pembayaran saat klik Bayar
+$("#checkout-btn").addEventListener("click", openPaymentModal);
+
+// Pilihan Metode Pembayaran
+document.querySelectorAll(".pay-method-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    setPaymentMethod(btn.dataset.method);
+  });
+});
+
+// Input Uang Tunai
+$("#cash-input")?.addEventListener("input", () => {
+  document.querySelectorAll(".quick-cash-chip").forEach((c) => c.classList.remove("active"));
+  updateCashChange(getCartTotal());
+});
+
+$("#cash-input")?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    const confirmBtn = $("#btn-confirm-payment");
+    if (confirmBtn && !confirmBtn.disabled) {
+      confirmPayment();
+    }
+  }
+});
+
+// Konfirmasi Pembayaran
+$("#btn-confirm-payment")?.addEventListener("click", confirmPayment);
+
+// Cetak & Transaksi Baru pada Struk
+$("#btn-print-receipt")?.addEventListener("click", () => {
+  window.print();
+});
+
+$("#btn-new-transaction")?.addEventListener("click", () => {
+  closeModal("receipt-modal");
+  document.querySelector('.tab[data-tab="kasir"]')?.click();
+  setTimeout(() => $("#kasir-barcode")?.focus(), 80);
+});
 
 $("#product-form").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -776,6 +1009,18 @@ document.addEventListener("click", async (e) => {
       entry.qty += 1;
     }
     renderCart();
+  }
+
+  const chip = e.target.closest(".quick-cash-chip");
+  if (chip) {
+    const cashVal = Number(chip.dataset.cash);
+    const cashInput = $("#cash-input");
+    if (cashInput) {
+      cashInput.value = cashVal;
+      document.querySelectorAll(".quick-cash-chip").forEach((c) => c.classList.remove("active"));
+      chip.classList.add("active");
+      updateCashChange(getCartTotal());
+    }
   }
 
   const restock = e.target.closest("[data-restock]");
